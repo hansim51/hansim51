@@ -1,0 +1,16 @@
+{
+  "name": "다들 어디로 갔나?",
+  "short_name": "다들어디로",
+  "description": "상권을 돌며 가게마다 손님 수를 기록하는 어플",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#faf7f2",
+  "theme_color": "#d97706",
+  "lang": "ko",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

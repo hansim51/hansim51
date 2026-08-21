@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>다들 어디로 갔나?</title>
+<meta name="theme-color" content="#d97706">
+<meta name="description" content="상권을 돌며 가게마다 손님 수를 기록하는 어플">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" href="./icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="다들어디로">
+<style>
+  :root {
+    --bg: #faf7f2;
+    --card: #ffffff;
+    --ink: #2b2620;
+    --ink-soft: #8a8177;
+    --line: #e8e2d8;
+    --amber: #d97706;
+    --amber-deep: #b45309;
+    --amber-soft: #fef3e2;
+    --red: #c2410c;
+    --green: #3f6212;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Pretendard", "Noto Sans KR", "Malgun Gothic", -apple-system, sans-serif;
+    background: var(--bg); color: var(--ink);
+    display: flex; justify-content: center;
+  }
+  #app {
+    width: 100%; max-width: 480px; min-height: 100dvh;
+    display: flex; flex-direction: column; padding: 16px;
+  }
+  .screen { display: none; flex: 1; flex-direction: column; }
+  .screen.on { display: flex; }
+
+  /* ── 공통 ── */
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 16px; padding: 18px;
+  }
+  button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+  .toast {
+    position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%);
+    background: var(--ink); color: #fff; font-size: 14px;
+    padding: 10px 18px; border-radius: 999px; opacity: 0;
+    transition: opacity .25s; pointer-events: none; white-space: nowrap; z-index: 99;
+  }
+  .toast.show { opacity: .95; }
+  .btn-main {
+    width: 100%; padding: 17px; border-radius: 14px;
+    background: var(--amber); color: #fff; font-size: 18px; font-weight: 800;
+  }
+  .btn-main:active { background: var(--amber-deep); }
+  .btn-ghost {
+    width: 100%; padding: 14px; border-radius: 14px;
+    background: #fff; border: 1px solid var(--line); color: var(--ink-soft); font-size: 15px; font-weight: 700;
+  }
+  .btn-kakao {
+    width: 100%; padding: 16px; border-radius: 14px;
+    background: #fee500; color: #191600; font-size: 17px; font-weight: 800;
+  }
+  .btn-sheet {
+    width: 100%; padding: 16px; border-radius: 14px;
+    background: #0f9d58; color: #fff; font-size: 17px; font-weight: 800;
+  }
+  .btn-sheet:disabled { opacity: .6; }
+  .hint { font-size: 12px; color: var(--ink-soft); line-height: 1.5; }
+  .scr-head {
+    display: flex; align-items: center; gap: 10px; padding: 2px 0 14px;
+  }
+  .scr-head .back { font-size: 15px; font-weight: 800; color: var(--amber-deep); padding: 8px 10px 8px 2px; }
+  .scr-head h2 { font-size: 19px; font-weight: 800; }
+
+  /* ── 첫 화면 ── */
+  #scr-home { justify-content: center; gap: 16px; }
+  .logo { text-align: center; margin-bottom: 4px; }
+  .logo svg { width: 92px; height: auto; }
+  .logo h1 { font-size: 24px; font-weight: 800; margin-top: 2px; }
+  .logo p { font-size: 13px; color: var(--ink-soft); margin-top: 6px; }
+  .field { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+  .field label { font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+  .field select, .field input[type="date"] {
+    font-family: inherit; font-size: 17px; padding: 12px 14px;
+    border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink);
+    width: 100%; appearance: none;
+  }
+  .home-links { display: flex; gap: 9px; }
+  .home-links .btn-ghost { color: var(--ink); }
+  #btn-resume { display: none; margin-bottom: 10px; background: var(--amber-soft); border: 1px solid #f3ce96; color: var(--amber-deep); }
+
+  /* ── 기록 화면 ── */
+  .rec-head { text-align: center; padding: 2px 0 10px; }
+  .rec-head .when { font-size: 13px; color: var(--ink-soft); }
+  .store-card { text-align: center; padding: 20px 16px 16px; }
+  .store-name { font-size: 27px; font-weight: 800; line-height: 1.25; word-break: keep-all; }
+  .store-prog { font-size: 13px; color: var(--ink-soft); margin-top: 6px; }
+  .count-view {
+    margin: 14px auto 4px; font-size: 44px; font-weight: 800; min-height: 58px;
+    color: var(--amber-deep); letter-spacing: 1px;
+  }
+  .count-view .unit { font-size: 20px; color: var(--ink-soft); font-weight: 600; }
+  .count-view.closed { color: var(--red); font-size: 32px; line-height: 58px; }
+  .count-view.empty { color: #cfc7bb; }
+  .pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+  .pad button {
+    padding: 15px 0; font-size: 22px; font-weight: 700;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 12px; color: var(--ink);
+  }
+  .pad button:active { background: var(--amber-soft); }
+  .pad .key-close { font-size: 15px; color: var(--red); font-weight: 800; }
+  .pad .key-close.on { background: var(--red); color: #fff; border-color: var(--red); }
+  .memo-wrap { margin-top: 12px; }
+  .memo-wrap input, .modal-box input, .modal-box textarea {
+    width: 100%; font-family: inherit; font-size: 16px; padding: 12px 14px;
+    border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink);
+  }
+  .memo-wrap input::placeholder { color: #c4bcb0; }
+  .nav { display: flex; gap: 8px; margin-top: 14px; padding-bottom: 6px; }
+  .nav button { flex: 1; padding: 16px 0; border-radius: 13px; font-size: 17px; font-weight: 800; }
+  .nav .prev { background: #fff; border: 1px solid var(--line); color: var(--ink-soft); }
+  .nav .next { flex: 1.6; background: var(--amber); color: #fff; }
+  .nav .next:active { background: var(--amber-deep); }
+  .nav .fin { background: #fff; border: 1px solid var(--line); color: var(--green); }
+
+  /* ── 요약(끝·지난 기록 열람) ── */
+  .sum-line { font-size: 14px; color: var(--ink-soft); padding: 0 2px 12px; line-height: 1.5; }
+  .sum-list { flex: 1; overflow-y: auto; min-height: 120px; }
+  .sum-list .row {
+    display: flex; justify-content: space-between; gap: 10px;
+    padding: 11px 4px; border-bottom: 1px solid var(--line); font-size: 16px;
+  }
+  .sum-list .row:last-child { border-bottom: none; }
+  .sum-list .nm { font-weight: 700; word-break: keep-all; }
+  .sum-list .memo { display: block; font-size: 12.5px; color: var(--ink-soft); font-weight: 400; margin-top: 2px; }
+  .sum-list .val { white-space: nowrap; font-weight: 700; color: var(--amber-deep); }
+  .sum-list .val.closed { color: var(--red); }
+  .sum-list .val.none { color: #cfc7bb; font-weight: 400; }
+  .done-btns { display: flex; flex-direction: column; gap: 9px; margin-top: 14px; padding-bottom: 6px; }
+  #scr-done h2 { font-size: 21px; font-weight: 800; padding: 6px 2px 4px; }
+
+  /* ── 목록(지난 기록·설정) ── */
+  .list { display: flex; flex-direction: column; gap: 9px; overflow-y: auto; }
+  .list-item {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px 15px; display: flex; align-items: center; gap: 8px;
+  }
+  .list-item .grow { flex: 1; min-width: 0; }
+  .list-item .t { font-size: 16px; font-weight: 700; word-break: keep-all; }
+  .list-item .s { font-size: 12.5px; color: var(--ink-soft); margin-top: 3px; }
+  .mini {
+    padding: 9px 11px; border-radius: 10px; font-size: 13.5px; font-weight: 700;
+    background: var(--bg); border: 1px solid var(--line); color: var(--ink); white-space: nowrap;
+  }
+  .mini:active { background: var(--amber-soft); }
+  .mini.warn { color: var(--red); }
+  .mini.warn.armed { background: var(--red); color: #fff; border-color: var(--red); }
+  .mini.updown { font-size: 15px; padding: 9px 10px; }
+  .add-row { margin-top: 12px; display: flex; flex-direction: column; gap: 9px; }
+  .empty-note { text-align: center; color: var(--ink-soft); font-size: 14px; padding: 30px 10px; line-height: 1.6; }
+  .set-sect { font-size: 13px; font-weight: 800; color: var(--ink-soft); padding: 18px 2px 8px; }
+
+  /* ── 모달 ── */
+  #modal {
+    display: none; position: fixed; inset: 0; background: rgba(43,38,32,.45);
+    z-index: 50; align-items: center; justify-content: center; padding: 24px;
+  }
+  #modal.on { display: flex; }
+  .modal-box { background: #fff; border-radius: 16px; padding: 20px; width: 100%; max-width: 380px; }
+  .modal-box h3 { font-size: 17px; font-weight: 800; margin-bottom: 12px; }
+  .modal-box textarea { min-height: 130px; resize: vertical; }
+  .modal-btns { display: flex; gap: 8px; margin-top: 14px; }
+  .modal-btns button { flex: 1; padding: 13px; border-radius: 12px; font-size: 16px; font-weight: 800; }
+  .modal-btns .ok { background: var(--amber); color: #fff; }
+  .modal-btns .no { background: #fff; border: 1px solid var(--line); color: var(--ink-soft); }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- 첫 화면 -->
+  <section class="screen on" id="scr-home">
+    <div class="logo">
+      <svg viewBox="0 0 140 150" aria-label="갓등">
+        <defs>
+          <linearGradient id="g-brass" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#8a6d3b"/><stop offset=".45" stop-color="#e0bd63"/><stop offset="1" stop-color="#8a6d3b"/>
+          </linearGradient>
+          <linearGradient id="g-cone" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#ffd873" stop-opacity=".55"/>
+            <stop offset="1" stop-color="#ffd873" stop-opacity="0"/>
+          </linearGradient>
+          <radialGradient id="g-glow" cx=".5" cy=".35" r=".65">
+            <stop offset="0" stop-color="#ffe9a8" stop-opacity=".9"/>
+            <stop offset="1" stop-color="#ffe9a8" stop-opacity="0"/>
+          </radialGradient>
+          <linearGradient id="g-dome" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#3a3a3a"/><stop offset="1" stop-color="#1f1f1f"/>
+          </linearGradient>
+        </defs>
+        <path d="M22 102 L118 102 L136 150 L4 150 Z" fill="url(#g-cone)"/>
+        <ellipse cx="70" cy="108" rx="34" ry="22" fill="url(#g-glow)"/>
+        <circle cx="70" cy="103" r="8" fill="#ffe9a8"/>
+        <path d="M70 58 C42 58 24 78 21 96 L15 96 L15 103 L125 103 L125 96 L119 96 C116 78 98 58 70 58 Z" fill="url(#g-dome)"/>
+        <path d="M70 60 C50 60 34 74 29 90 C38 72 52 63 70 62 Z" fill="#4a4a4a" opacity=".55"/>
+        <path d="M58 45 L82 45 L86 61 L54 61 Z" fill="#242424"/>
+        <rect x="66" y="49" width="8" height="8" rx="1.5" fill="#0e0e0e"/>
+        <rect x="60" y="29" width="20" height="16" rx="3" fill="url(#g-brass)"/>
+        <rect x="63" y="19" width="14" height="11" rx="2" fill="#1c1c1c"/>
+        <path d="M70 0 v20" stroke="#1c1c1c" stroke-width="3"/>
+      </svg>
+      <h1>다들 어디로 갔나?</h1>
+      <p>상권을 돌며 가게마다 손님 수를 적는다</p>
+    </div>
+    <div class="card">
+      <button class="btn-ghost" id="btn-resume" onclick="resumeDraft()"></button>
+      <div class="field">
+        <label>상권</label>
+        <select id="in-area"></select>
+      </div>
+      <div class="field">
+        <label>날짜</label>
+        <input type="date" id="in-date">
+      </div>
+      <button class="btn-main" onclick="startRound()">돌기 시작</button>
+    </div>
+    <div class="home-links">
+      <button class="btn-ghost" onclick="openHist()">지난 기록</button>
+      <button class="btn-ghost" onclick="openSet()">설정</button>
+    </div>
+    <div class="hint" style="text-align:center;" id="home-hint"></div>
+  </section>
+
+  <!-- 기록 화면 -->
+  <section class="screen" id="scr-rec">
+    <div class="rec-head"><div class="when" id="rec-when"></div></div>
+    <div class="card store-card">
+      <div class="store-name" id="st-name"></div>
+      <div class="store-prog" id="st-prog"></div>
+      <div class="count-view" id="st-count"></div>
+      <div class="pad">
+        <button onclick="key(1)">1</button><button onclick="key(2)">2</button><button onclick="key(3)">3</button>
+        <button onclick="key(4)">4</button><button onclick="key(5)">5</button><button onclick="key(6)">6</button>
+        <button onclick="key(7)">7</button><button onclick="key(8)">8</button><button onclick="key(9)">9</button>
+        <button onclick="keyBack()">←</button><button onclick="key(0)">0</button>
+        <button class="key-close" id="key-close" onclick="toggleClosed()">문닫음</button>
+      </div>
+      <div class="memo-wrap">
+        <input type="text" id="in-memo" placeholder="메모 (안 적어도 됨)" autocomplete="off">
+      </div>
+    </div>
+    <div class="nav">
+      <button class="prev" id="btn-prev" onclick="goPrev()">이전</button>
+      <button class="next" id="btn-next" onclick="goNext()">다음</button>
+      <button class="fin" onclick="finishRound()">끝</button>
+    </div>
+  </section>
+
+  <!-- 끝 화면 -->
+  <section class="screen" id="scr-done">
+    <h2>한 바퀴 끝 🎉</h2>
+    <div class="sum-line" id="sum-line"></div>
+    <div class="card sum-list" id="sum-list"></div>
+    <div class="done-btns">
+      <button class="btn-kakao" onclick="shareKakao(doneRound)">카카오톡으로 보내기</button>
+      <button class="btn-sheet" onclick="exportRound(doneRound, this)">구글 시트로 보내기</button>
+      <button class="btn-ghost" onclick="goHome()">처음으로</button>
+    </div>
+  </section>
+
+  <!-- 지난 기록 목록 -->
+  <section class="screen" id="scr-hist">
+    <div class="scr-head"><button class="back" onclick="goHome()">‹ 뒤로</button><h2>지난 기록</h2></div>
+    <div class="list" id="hist-list"></div>
+  </section>
+
+  <!-- 지난 기록 하나 열람 -->
+  <section class="screen" id="scr-histview">
+    <div class="scr-head"><button class="back" onclick="openHist()">‹ 뒤로</button><h2>기록 보기</h2></div>
+    <div class="sum-line" id="hv-line"></div>
+    <div class="card sum-list" id="hv-list"></div>
+    <div class="done-btns">
+      <button class="btn-kakao" onclick="shareKakao(viewRound)">카카오톡으로 보내기</button>
+      <button class="btn-sheet" onclick="exportRound(viewRound, this)">구글 시트로 보내기</button>
+      <button class="btn-ghost" style="color:var(--ink)" onclick="editRound()">고치기</button>
+      <button class="btn-ghost warn-del" id="btn-del-round" onclick="delRound(this)">이 기록 지우기</button>
+    </div>
+  </section>
+
+  <!-- 설정 -->
+  <section class="screen" id="scr-set">
+    <div class="scr-head"><button class="back" onclick="goHome()">‹ 뒤로</button><h2>설정</h2></div>
+    <div class="set-sect">상권 목록</div>
+    <div class="list" id="area-list"></div>
+    <div class="add-row"><button class="btn-ghost" style="color:var(--amber-deep)" onclick="addArea()">＋ 상권 보태기</button></div>
+    <div class="set-sect">구글 시트</div>
+    <div class="hint">상권 줄의 [시트] 단추에 앱스 스크립트 웹 앱 주소를 넣으면, 기록을 그 구글 시트로 보낼 수 있어요. 만드는 걸음은 '다들어디로갔나_구글시트잇기' 문서를 보세요.</div>
+    <div class="set-sect">백업</div>
+    <div class="home-links">
+      <button class="btn-ghost" onclick="exportData()">자료 내려받기</button>
+      <button class="btn-ghost" onclick="document.getElementById('in-import').click()">자료 되살리기</button>
+    </div>
+    <input type="file" id="in-import" accept=".json" style="display:none" onchange="importData(this)">
+    <div class="hint" style="margin-top:10px;">기록은 이 폰의 크롬 안에 저장됩니다. 크롬의 "인터넷 사용 기록 삭제"를 하면 지워질 수 있으니, 가끔 '자료 내려받기'로 백업해 두세요.</div>
+  </section>
+
+  <!-- 가게 목록 (상권 하나) -->
+  <section class="screen" id="scr-stores">
+    <div class="scr-head"><button class="back" onclick="openSet()">‹ 뒤로</button><h2 id="stores-title"></h2></div>
+    <div class="hint" style="padding: 0 2px 10px;">도는 길 순서대로 늘어놓으세요. ↑↓ 로 순서를 바꿉니다.</div>
+    <div class="list" id="store-list"></div>
+    <div class="add-row">
+      <button class="btn-ghost" style="color:var(--amber-deep)" onclick="addStore()">＋ 가게 보태기</button>
+      <button class="btn-ghost" onclick="addStoresBulk()">여러 가게 한꺼번에 붙여넣기</button>
+    </div>
+  </section>
+
+</div>
+
+<!-- 모달 -->
+<div id="modal">
+  <div class="modal-box">
+    <h3 id="md-title"></h3>
+    <input type="text" id="md-input" autocomplete="off">
+    <textarea id="md-textarea" placeholder="한 줄에 가게 하나씩"></textarea>
+    <div class="modal-btns">
+      <button class="no" onclick="closeModal()">취소</button>
+      <button class="ok" onclick="okModal()">확인</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const DAYS = ["일","월","화","수","목","금","토"];
+const LS_KEY = "dadeul_v1";
+
+// ── 저장 (폰 브라우저 안 서랍. 안 되는 환경이면 켜 둔 동안만 기억) ──
+function seed() {
+  return {
+    areas: [{ id: 1, name: "연신내", stores: ["곱창이야기","순대의 꿈","치치치킨","별빛포차","국수나무집","호프의 밤","김밥천지","연신내닭발"] }],
+    rounds: [], draft: null, lastArea: 1, nextId: 2, seeded: true
+  };
+}
+let data;
+try { data = JSON.parse(localStorage.getItem(LS_KEY)) || seed(); } catch (e) { data = seed(); }
+let canStore = true;
+try { localStorage.setItem(LS_KEY + "_t", "1"); localStorage.removeItem(LS_KEY + "_t"); } catch (e) { canStore = false; }
+function save() { try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch (e) {} }
+
+let round = null;     // 지금 적는 바퀴
+let idx = 0;
+let mode = "new";     // new | edit
+let doneRound = null; // 끝 화면이 보여주는 바퀴
+let viewRound = null; // 지난 기록 열람 중인 바퀴
+
+// ── 공통 ──
+function $(id) { return document.getElementById(id); }
+function show(id) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("on"));
+  $(id).classList.add("on");
+  window.scrollTo(0, 0);
+}
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._tm); t._tm = setTimeout(() => t.classList.remove("show"), 2200);
+}
+function fmtDate(d) { return d + "(" + DAYS[new Date(d + "T00:00:00").getDay()] + ")"; }
+function nowTime() {
+  const n = new Date();
+  return String(n.getHours()).padStart(2,"0") + ":" + String(n.getMinutes()).padStart(2,"0");
+}
+function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function areaById(id) { return data.areas.find(a => a.id === id); }
+function recorded(e) { return e.count !== null || e.closed || e.memo; }
+
+// ── 모달 ──
+let mdCb = null;
+function askText(title, val, cb) {
+  $("md-title").textContent = title;
+  $("md-input").style.display = ""; $("md-textarea").style.display = "none";
+  $("md-input").value = val || "";
+  mdCb = () => cb($("md-input").value.trim());
+  $("modal").classList.add("on");
+  setTimeout(() => $("md-input").focus(), 50);
+}
+function askLines(title, cb) {
+  $("md-title").textContent = title;
+  $("md-input").style.display = "none"; $("md-textarea").style.display = "";
+  $("md-textarea").value = "";
+  mdCb = () => cb($("md-textarea").value);
+  $("modal").classList.add("on");
+}
+function okModal() { const f = mdCb; closeModal(); if (f) f(); }
+function closeModal() { $("modal").classList.remove("on"); }
+
+// ── 첫 화면 ──
+function goHome() {
+  const sel = $("in-area");
+  sel.innerHTML = "";
+  data.areas.forEach(a => {
+    const o = document.createElement("option");
+    o.value = a.id; o.textContent = a.name + " (" + a.stores.length + "곳)";
+    if (a.id === data.lastArea) o.selected = true;
+    sel.appendChild(o);
+  });
+  $("in-date").value = new Date().toLocaleDateString("sv-SE");
+  const r = $("btn-resume");
+  if (data.draft) {
+    r.style.display = "block";
+    r.textContent = "하다 만 바퀴 이어서 하기 — " + data.draft.area + " " + fmtDate(data.draft.date);
+  } else r.style.display = "none";
+  $("home-hint").textContent = canStore
+    ? (data.seeded ? "시험용 가게 목록이 들어 있어요. [설정]에서 진짜 목록으로 바꾸세요." : "")
+    : "이 환경에서는 저장이 안 되어, 켜 둔 동안만 기억합니다. 폰 크롬에서는 저장됩니다.";
+  show("scr-home");
+}
+
+// ── 바퀴 시작·이어하기 ──
+function startRound() {
+  const area = areaById(Number($("in-area").value));
+  if (!area) { toast("먼저 설정에서 상권을 만들어 주세요"); return; }
+  if (area.stores.length === 0) { toast("이 상권에 가게가 없어요. 설정에서 넣어 주세요"); return; }
+  data.lastArea = area.id;
+  round = {
+    id: data.nextId++, areaId: area.id, area: area.name,
+    date: $("in-date").value, startTime: nowTime(),
+    stores: area.stores.slice(),
+    entries: area.stores.map(() => ({ count: null, closed: false, memo: "", time: null })),
+    idx: 0
+  };
+  idx = 0; mode = "new";
+  data.draft = round; save();
+  show("scr-rec"); renderStore();
+}
+function resumeDraft() {
+  round = data.draft; idx = round.idx || 0; mode = "new";
+  show("scr-rec"); renderStore();
+}
+
+// ── 기록 화면 ──
+function renderStore() {
+  const e = round.entries[idx];
+  $("rec-when").textContent = (mode === "edit" ? "고치는 중 — " : "") +
+    round.area + " · " + fmtDate(round.date) + " " + round.startTime + (mode === "edit" ? "" : " 시작");
+  $("st-name").textContent = round.stores[idx];
+  $("st-prog").textContent = (idx + 1) + " / " + round.stores.length;
+  $("in-memo").value = e.memo;
+  $("btn-prev").disabled = (idx === 0);
+  $("btn-prev").style.opacity = (idx === 0) ? .4 : 1;
+  $("btn-next").textContent = (idx === round.stores.length - 1) ? "다음(마지막)" : "다음";
+  renderCount();
+}
+function renderCount() {
+  const e = round.entries[idx];
+  const v = $("st-count");
+  $("key-close").classList.toggle("on", e.closed);
+  v.classList.remove("closed","empty");
+  if (e.closed) { v.textContent = "문닫음"; v.classList.add("closed"); }
+  else if (e.count === null) { v.textContent = "─"; v.classList.add("empty"); }
+  else { v.innerHTML = e.count + '<span class="unit"> 명</span>'; }
+}
+function key(n) {
+  const e = round.entries[idx];
+  if (e.closed) return;
+  const cur = (e.count === null) ? "" : String(e.count);
+  if (cur.length >= 3) return;
+  e.count = Number(cur + n);
+  renderCount();
+}
+function keyBack() {
+  const e = round.entries[idx];
+  if (e.closed) { e.closed = false; renderCount(); return; }
+  if (e.count === null) return;
+  const s = String(e.count).slice(0, -1);
+  e.count = s === "" ? null : Number(s);
+  renderCount();
+}
+function toggleClosed() {
+  const e = round.entries[idx];
+  e.closed = !e.closed;
+  if (e.closed) e.count = null;
+  renderCount();
+}
+function saveCurrent() {
+  const e = round.entries[idx];
+  e.memo = $("in-memo").value.trim();
+  if (recorded(e)) e.time = e.time || nowTime();
+  round.idx = idx;
+  if (mode === "new") data.draft = round;
+  save();
+}
+function goNext() {
+  saveCurrent();
+  if (idx === round.stores.length - 1) { finishRound(); return; }
+  idx++; renderStore();
+}
+function goPrev() {
+  if (idx === 0) return;
+  saveCurrent();
+  idx--; renderStore();
+}
+function finishRound() {
+  saveCurrent();
+  if (mode === "edit") {
+    save();
+    viewRound = round;
+    renderHistView(); show("scr-histview");
+    toast("고친 대로 저장했어요");
+    return;
+  }
+  data.rounds.push(round);
+  data.draft = null;
+  save();
+  doneRound = round;
+  renderSummary(round, "sum-line", "sum-list",
+    canStore ? " · 저장됨" : "");
+  show("scr-done");
+}
+
+// ── 요약 그리기 (끝 화면·지난 기록 공용) ──
+function roundStats(r) {
+  const done = r.entries.filter(recorded).length;
+  const total = r.entries.reduce((s,e) => s + (e.count || 0), 0);
+  const closed = r.entries.filter(e => e.closed).length;
+  return { done, total, closed };
+}
+function renderSummary(r, lineId, listId, extra) {
+  const st = roundStats(r);
+  $(lineId).textContent = r.area + " · " + fmtDate(r.date) + " " + r.startTime +
+    " — 기록 " + st.done + "곳 · 손님 " + st.total + "명 · 문닫음 " + st.closed + "곳" + (extra || "");
+  const list = $(listId);
+  list.innerHTML = "";
+  r.stores.forEach((name, i) => {
+    const e = r.entries[i];
+    let val, cls = "val";
+    if (e.closed) { val = "문닫음"; cls += " closed"; }
+    else if (e.count !== null) { val = e.count + "명"; }
+    else { val = "기록 없음"; cls += " none"; }
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = '<span class="nm">' + esc(name) +
+      (e.memo ? '<span class="memo">' + esc(e.memo) + '</span>' : '') +
+      '</span><span class="' + cls + '">' + val + '</span>';
+    list.appendChild(row);
+  });
+}
+
+// ── 카카오톡으로 보내기 ──
+function kakaoText(r) {
+  const lines = [fmtDate(r.date) + " " + r.startTime + " · " + r.area];
+  r.stores.forEach((name, i) => {
+    const e = r.entries[i];
+    if (!recorded(e)) return;
+    let line = name + " : ";
+    if (e.closed) line += "문닫음";
+    else if (e.count !== null) line += e.count + "명";
+    else line += "메모만";
+    if (e.memo) line += " (" + e.memo + ")";
+    lines.push(line);
+  });
+  return lines.join("\n");
+}
+async function shareKakao(r) {
+  if (!r) return;
+  const text = kakaoText(r);
+  if (navigator.share) {
+    try { await navigator.share({ text }); } catch (err) {}
+    return;
+  }
+  try { await navigator.clipboard.writeText(text); toast("복사했어요! 카카오톡에 붙여넣으세요"); }
+  catch (err) { toast("복사가 안 되는 환경이에요"); }
+}
+
+// ── 구글 시트로 보내기 ──
+function roundPayload(r) {
+  return {
+    kind: "round", area: r.area, date: r.date,
+    day: DAYS[new Date(r.date + "T00:00:00").getDay()],
+    startTime: r.startTime,
+    stores: r.stores,
+    counts: r.entries.map(e => e.closed ? "닫음" : (e.count !== null ? e.count : "")),
+    memos: r.entries.map(e => e.memo || "")
+  };
+}
+async function exportRound(r, btn) {
+  if (!r) return;
+  const a = areaById(r.areaId) || data.areas.find(x => x.name === r.area);
+  const url = a && a.sheetUrl;
+  if (!url) { toast("설정에서 이 상권에 [시트] 주소를 먼저 넣어 주세요"); return; }
+  const old = btn.textContent;
+  btn.disabled = true; btn.textContent = "보내는 중…";
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(roundPayload(r))
+    });
+    let ok = res.ok;
+    try { const j = await res.json(); ok = j.ok; } catch (e) {}
+    if (!ok) throw new Error("fail");
+    r.sentAt = new Date().toLocaleDateString("sv-SE") + " " + nowTime();
+    save();
+    toast("구글 시트에 적었어요 ✓");
+  } catch (e) {
+    toast("보내기가 안 됐어요. 인터넷과 시트 주소를 확인해 주세요");
+  }
+  btn.disabled = false; btn.textContent = old;
+}
+
+// ── 지난 기록 ──
+function openHist() {
+  const list = $("hist-list");
+  list.innerHTML = "";
+  const rounds = data.rounds.slice().sort((a,b) => (b.date + b.startTime).localeCompare(a.date + a.startTime));
+  if (rounds.length === 0) {
+    list.innerHTML = '<div class="empty-note">아직 기록이 없어요.<br>한 바퀴 돌고 나면 여기에 쌓입니다.</div>';
+  }
+  rounds.forEach(r => {
+    const st = roundStats(r);
+    const item = document.createElement("div");
+    item.className = "list-item";
+    item.innerHTML = '<div class="grow"><div class="t">' + fmtDate(r.date) + " " + r.startTime +
+      ' · ' + esc(r.area) + '</div><div class="s">기록 ' + st.done + "곳 · 손님 " + st.total + "명 · 문닫음 " + st.closed + '곳' +
+      (r.sentAt ? ' · 시트 보냄' : '') + '</div></div>' +
+      '<button class="mini">보기</button>';
+    item.onclick = () => { viewRound = r; renderHistView(); show("scr-histview"); };
+    list.appendChild(item);
+  });
+  show("scr-hist");
+}
+function renderHistView() {
+  renderSummary(viewRound, "hv-line", "hv-list", "");
+  const b = $("btn-del-round");
+  b.textContent = "이 기록 지우기"; b.classList.remove("armed"); b.style.color = "var(--red)";
+}
+function editRound() {
+  round = viewRound; idx = 0; mode = "edit";
+  show("scr-rec"); renderStore();
+}
+function delRound(btn) {
+  if (!btn.dataset.armed) {
+    btn.dataset.armed = "1"; btn.textContent = "정말 지울까요? 한 번 더 누르면 지워져요";
+    setTimeout(() => { delete btn.dataset.armed; btn.textContent = "이 기록 지우기"; }, 3000);
+    return;
+  }
+  delete btn.dataset.armed;
+  data.rounds = data.rounds.filter(r => r !== viewRound && r.id !== viewRound.id);
+  save();
+  toast("지웠어요");
+  openHist();
+}
+
+// ── 설정: 상권 ──
+function openSet() {
+  const list = $("area-list");
+  list.innerHTML = "";
+  if (data.areas.length === 0) {
+    list.innerHTML = '<div class="empty-note">상권이 없어요. 아래에서 보태 주세요.</div>';
+  }
+  data.areas.forEach(a => {
+    const item = document.createElement("div");
+    item.className = "list-item";
+    const g = document.createElement("div"); g.className = "grow";
+    g.innerHTML = '<div class="t">' + esc(a.name) + '</div><div class="s">가게 ' + a.stores.length + '곳 · ' +
+      (a.sheetUrl ? '시트 연결됨' : '시트 없음') + '</div>';
+    const bStores = mkBtn("가게", () => openStores(a.id));
+    const bSheet = mkBtn("시트", () => askText("구글 시트 주소 (앱스 스크립트 웹 앱 URL)", a.sheetUrl || "", v => {
+      a.sheetUrl = v; save(); openSet();
+      if (v) toast("시트 주소를 넣었어요");
+    }));
+    const bRen = mkBtn("✎", () => askText("상권 이름 고치기", a.name, v => {
+      if (!v) return; a.name = v; save(); openSet();
+    }));
+    const bDel = mkBtn("✕", null, "warn");
+    bDel.onclick = () => armDel(bDel, "✕", () => {
+      data.areas = data.areas.filter(x => x.id !== a.id); save(); openSet();
+    });
+    item.append(g, bStores, bSheet, bRen, bDel);
+    list.appendChild(item);
+  });
+  show("scr-set");
+}
+function mkBtn(label, fn, extra) {
+  const b = document.createElement("button");
+  b.className = "mini" + (extra ? " " + extra : "");
+  b.textContent = label;
+  if (fn) b.onclick = fn;
+  return b;
+}
+function armDel(btn, label, fn) {
+  if (!btn.dataset.armed) {
+    btn.dataset.armed = "1"; btn.classList.add("armed"); btn.textContent = "정말?";
+    setTimeout(() => { delete btn.dataset.armed; btn.classList.remove("armed"); btn.textContent = label; }, 3000);
+    return;
+  }
+  fn();
+}
+function addArea() {
+  askText("새 상권 이름", "", v => {
+    if (!v) return;
+    data.areas.push({ id: data.nextId++, name: v, stores: [] });
+    data.seeded = false; save(); openSet();
+  });
+}
+
+// ── 설정: 가게 목록 ──
+let curAreaId = null;
+function openStores(id) {
+  curAreaId = id;
+  const a = areaById(id);
+  $("stores-title").textContent = a.name + " 가게 목록";
+  const list = $("store-list");
+  list.innerHTML = "";
+  if (a.stores.length === 0) {
+    list.innerHTML = '<div class="empty-note">가게가 없어요.<br>아래에서 보태거나, 한꺼번에 붙여넣으세요.</div>';
+  }
+  a.stores.forEach((name, i) => {
+    const item = document.createElement("div");
+    item.className = "list-item";
+    const g = document.createElement("div"); g.className = "grow";
+    g.innerHTML = '<div class="t">' + (i + 1) + ". " + esc(name) + '</div>';
+    const up = mkBtn("↑", () => moveStore(i, -1), "updown");
+    const dn = mkBtn("↓", () => moveStore(i, 1), "updown");
+    const ren = mkBtn("✎", () => askText("가게 이름 고치기", name, v => {
+      if (!v) return; a.stores[i] = v; save(); openStores(id);
+    }));
+    const del = mkBtn("✕", null, "warn");
+    del.onclick = () => armDel(del, "✕", () => { a.stores.splice(i, 1); save(); openStores(id); });
+    item.append(g, up, dn, ren, del);
+    list.appendChild(item);
+  });
+  show("scr-stores");
+}
+function moveStore(i, d) {
+  const a = areaById(curAreaId);
+  const j = i + d;
+  if (j < 0 || j >= a.stores.length) return;
+  [a.stores[i], a.stores[j]] = [a.stores[j], a.stores[i]];
+  save(); openStores(curAreaId);
+}
+function addStore() {
+  askText("새 가게 이름", "", v => {
+    if (!v) return;
+    areaById(curAreaId).stores.push(v);
+    data.seeded = false; save(); openStores(curAreaId);
+  });
+}
+function addStoresBulk() {
+  askLines("여러 가게 한꺼번에 붙여넣기", text => {
+    const names = text.split("\n").map(s => s.trim()).filter(Boolean);
+    if (names.length === 0) return;
+    areaById(curAreaId).stores.push(...names);
+    data.seeded = false; save(); openStores(curAreaId);
+    toast(names.length + "곳을 보탰어요");
+  });
+}
+
+// ── 백업 ──
+function exportData() {
+  const blob = new Blob([JSON.stringify(data, null, 1)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "다들어디로갔나_백업_" + new Date().toLocaleDateString("sv-SE") + ".json";
+  document.body.appendChild(a); a.click(); a.remove();
+  toast("백업 파일을 내려받았어요");
+}
+function importData(input) {
+  const f = input.files[0];
+  if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const d = JSON.parse(rd.result);
+      if (!d.areas || !d.rounds) throw new Error("bad");
+      data = d; save();
+      toast("자료를 되살렸어요");
+      goHome();
+    } catch (e) { toast("백업 파일이 아닌 것 같아요"); }
+  };
+  rd.readAsText(f);
+  input.value = "";
+}
+
+goHome();
+
+// ── 오프라인 준비 (서비스워커) ──
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
