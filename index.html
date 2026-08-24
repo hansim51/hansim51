@@ -100,21 +100,32 @@
   .store-card { text-align: center; padding: 20px 16px 16px; }
   .store-name { font-size: 27px; font-weight: 800; line-height: 1.25; word-break: keep-all; }
   .store-prog { font-size: 13px; color: var(--ink-soft); margin-top: 6px; }
-  .count-view {
-    margin: 14px auto 4px; font-size: 44px; font-weight: 800; min-height: 58px;
-    color: var(--amber-deep); letter-spacing: 1px;
+  .tally { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .tally-row {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 10px 10px 10px 16px;
   }
-  .count-view .unit { font-size: 20px; color: var(--ink-soft); font-weight: 600; }
-  .count-view.closed { color: var(--red); font-size: 32px; line-height: 58px; }
-  .count-view.empty { color: #cfc7bb; }
-  .pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
-  .pad button {
-    padding: 15px 0; font-size: 22px; font-weight: 700;
-    background: var(--bg); border: 1px solid var(--line); border-radius: 12px; color: var(--ink);
+  .tally-row.dim { opacity: .35; pointer-events: none; }
+  .tally-label { font-size: 16px; font-weight: 700; }
+  .stepper { display: flex; align-items: center; gap: 4px; }
+  .stepper button {
+    width: 44px; height: 44px; border-radius: 10px; font-size: 20px; font-weight: 800;
+    background: #fff; border: 1px solid var(--line); color: var(--ink);
   }
-  .pad button:active { background: var(--amber-soft); }
-  .pad .key-close { font-size: 15px; color: var(--red); font-weight: 800; }
-  .pad .key-close.on { background: var(--red); color: #fff; border-color: var(--red); }
+  .stepper button:active { background: var(--amber-soft); }
+  .stepper .n { min-width: 34px; text-align: center; font-size: 20px; font-weight: 800; }
+  .tally-total {
+    margin: 12px auto 4px; font-size: 32px; font-weight: 800; min-height: 42px;
+    color: var(--amber-deep); letter-spacing: .5px;
+  }
+  .tally-total .unit { font-size: 17px; color: var(--ink-soft); font-weight: 600; }
+  .tally-total.closed { color: var(--red); font-size: 26px; line-height: 42px; }
+  .tally-total.empty { color: #cfc7bb; font-size: 20px; line-height: 42px; }
+  .key-close {
+    width: 100%; margin-top: 10px; padding: 13px; border-radius: 12px; font-size: 15px;
+    background: var(--bg); border: 1px solid var(--line); color: var(--red); font-weight: 800;
+  }
+  .key-close.on { background: var(--red); color: #fff; border-color: var(--red); }
   .memo-wrap { margin-top: 12px; }
   .memo-wrap input, .modal-box input, .modal-box textarea {
     width: 100%; font-family: inherit; font-size: 16px; padding: 12px 14px;
@@ -138,6 +149,7 @@
   .sum-list .row:last-child { border-bottom: none; }
   .sum-list .nm { font-weight: 700; word-break: keep-all; }
   .sum-list .memo { display: block; font-size: 12.5px; color: var(--ink-soft); font-weight: 400; margin-top: 2px; }
+  .sum-list .detail { display: block; font-size: 12.5px; color: var(--amber-deep); font-weight: 600; margin-top: 2px; }
   .sum-list .val { white-space: nowrap; font-weight: 700; color: var(--amber-deep); }
   .sum-list .val.closed { color: var(--red); }
   .sum-list .val.none { color: #cfc7bb; font-weight: 400; }
@@ -242,14 +254,26 @@
     <div class="card store-card">
       <div class="store-name" id="st-name"></div>
       <div class="store-prog" id="st-prog"></div>
-      <div class="count-view" id="st-count"></div>
-      <div class="pad">
-        <button onclick="key(1)">1</button><button onclick="key(2)">2</button><button onclick="key(3)">3</button>
-        <button onclick="key(4)">4</button><button onclick="key(5)">5</button><button onclick="key(6)">6</button>
-        <button onclick="key(7)">7</button><button onclick="key(8)">8</button><button onclick="key(9)">9</button>
-        <button onclick="keyBack()">←</button><button onclick="key(0)">0</button>
-        <button class="key-close" id="key-close" onclick="toggleClosed()">문닫음</button>
+      <div class="tally">
+        <div class="tally-row" id="row-four">
+          <span class="tally-label">4인상</span>
+          <div class="stepper">
+            <button onclick="stepFour(-1)">－</button>
+            <span class="n" id="four-n">0</span>
+            <button onclick="stepFour(1)">＋</button>
+          </div>
+        </div>
+        <div class="tally-row" id="row-two">
+          <span class="tally-label">2인상</span>
+          <div class="stepper">
+            <button onclick="stepTwo(-1)">－</button>
+            <span class="n" id="two-n">0</span>
+            <button onclick="stepTwo(1)">＋</button>
+          </div>
+        </div>
       </div>
+      <div class="tally-total" id="st-count"></div>
+      <button class="key-close" id="key-close" onclick="toggleClosed()">문닫음</button>
       <div class="memo-wrap">
         <input type="text" id="in-memo" placeholder="메모 (안 적어도 됨)" autocomplete="off">
       </div>
@@ -378,7 +402,29 @@ function nowTime() {
 }
 function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 function areaById(id) { return data.areas.find(a => a.id === id); }
-function recorded(e) { return e.count !== null || e.closed || e.memo; }
+
+// ── 손님 수 셈 (4인상·2인상 방식 / 예전 방식 둘 다 다룸) ──
+// 예전에 적은 기록(e.count가 숫자, e.four/e.two가 없음)은 그대로 보여주고,
+// 새로 적는 기록은 4인상·2인상 개수로 셈한다.
+function isLegacy(e) { return e.four === undefined && e.two === undefined && e.count !== undefined; }
+function recorded(e) {
+  if (isLegacy(e)) return e.count !== null || e.closed || e.memo;
+  return e.closed || !!e.memo || e.touched || (e.four > 0) || (e.two > 0);
+}
+function entryTotal(e) {
+  if (e.closed) return 0;
+  if (isLegacy(e)) return e.count === null ? 0 : e.count;
+  return (e.four || 0) * 4 + (e.two || 0) * 2;
+}
+// 화면·카카오톡에 보여줄 글 — "4인상 2, 2인상 6, 다 해서 20명" 꼴
+function entryDetailText(e) {
+  if (isLegacy(e)) return e.count + "명";
+  const parts = [];
+  if (e.four) parts.push("4인상 " + e.four);
+  if (e.two) parts.push("2인상 " + e.two);
+  const total = entryTotal(e);
+  return parts.length ? parts.join(", ") + ", 다 해서 " + total + "명" : total + "명";
+}
 
 // ── 모달 ──
 let mdCb = null;
@@ -432,7 +478,7 @@ function startRound() {
     id: data.nextId++, areaId: area.id, area: area.name,
     date: $("in-date").value, startTime: nowTime(),
     stores: area.stores.slice(),
-    entries: area.stores.map(() => ({ count: null, closed: false, memo: "", time: null })),
+    entries: area.stores.map(() => ({ four: 0, two: 0, closed: false, memo: "", time: null, touched: false })),
     idx: 0
   };
   idx = 0; mode = "new";
@@ -455,38 +501,49 @@ function renderStore() {
   $("btn-prev").disabled = (idx === 0);
   $("btn-prev").style.opacity = (idx === 0) ? .4 : 1;
   $("btn-next").textContent = (idx === round.stores.length - 1) ? "다음(마지막)" : "다음";
-  renderCount();
+  renderTally();
 }
-function renderCount() {
+function renderTally() {
   const e = round.entries[idx];
   const v = $("st-count");
   $("key-close").classList.toggle("on", e.closed);
-  v.classList.remove("closed","empty");
+  $("row-four").classList.toggle("dim", e.closed);
+  $("row-two").classList.toggle("dim", e.closed);
+  v.classList.remove("closed", "empty");
+
+  if (isLegacy(e)) {
+    // 예전 방식으로 적힌 기록 — 4인상/2인상 칸은 0에서 새로 시작할 수 있게 두고, 이전 값은 참고로만 보여준다
+    $("four-n").textContent = "0"; $("two-n").textContent = "0";
+    v.innerHTML = e.count + '<span class="unit"> 명 (예전 방식으로 적은 기록)</span>';
+    return;
+  }
+  $("four-n").textContent = e.four || 0;
+  $("two-n").textContent = e.two || 0;
   if (e.closed) { v.textContent = "문닫음"; v.classList.add("closed"); }
-  else if (e.count === null) { v.textContent = "─"; v.classList.add("empty"); }
-  else { v.innerHTML = e.count + '<span class="unit"> 명</span>'; }
+  else if (!recorded(e)) { v.textContent = "─"; v.classList.add("empty"); }
+  else { v.innerHTML = entryTotal(e) + '<span class="unit"> 명</span>'; }
 }
-function key(n) {
+function stepFour(d) {
   const e = round.entries[idx];
   if (e.closed) return;
-  const cur = (e.count === null) ? "" : String(e.count);
-  if (cur.length >= 3) return;
-  e.count = Number(cur + n);
-  renderCount();
+  if (isLegacy(e)) { delete e.count; e.four = 0; e.two = 0; }
+  e.four = Math.max(0, (e.four || 0) + d);
+  e.touched = true;
+  renderTally();
 }
-function keyBack() {
+function stepTwo(d) {
   const e = round.entries[idx];
-  if (e.closed) { e.closed = false; renderCount(); return; }
-  if (e.count === null) return;
-  const s = String(e.count).slice(0, -1);
-  e.count = s === "" ? null : Number(s);
-  renderCount();
+  if (e.closed) return;
+  if (isLegacy(e)) { delete e.count; e.four = 0; e.two = 0; }
+  e.two = Math.max(0, (e.two || 0) + d);
+  e.touched = true;
+  renderTally();
 }
 function toggleClosed() {
   const e = round.entries[idx];
   e.closed = !e.closed;
-  if (e.closed) e.count = null;
-  renderCount();
+  if (e.closed) { delete e.count; e.four = 0; e.two = 0; e.touched = false; }
+  renderTally();
 }
 function saveCurrent() {
   const e = round.entries[idx];
@@ -527,7 +584,7 @@ function finishRound() {
 // ── 요약 그리기 (끝 화면·지난 기록 공용) ──
 function roundStats(r) {
   const done = r.entries.filter(recorded).length;
-  const total = r.entries.reduce((s,e) => s + (e.count || 0), 0);
+  const total = r.entries.reduce((s,e) => s + (e.closed ? 0 : entryTotal(e)), 0);
   const closed = r.entries.filter(e => e.closed).length;
   return { done, total, closed };
 }
@@ -539,13 +596,14 @@ function renderSummary(r, lineId, listId, extra) {
   list.innerHTML = "";
   r.stores.forEach((name, i) => {
     const e = r.entries[i];
-    let val, cls = "val";
+    let val, cls = "val", detail = "";
     if (e.closed) { val = "문닫음"; cls += " closed"; }
-    else if (e.count !== null) { val = e.count + "명"; }
-    else { val = "기록 없음"; cls += " none"; }
+    else if (!recorded(e)) { val = "기록 없음"; cls += " none"; }
+    else { val = entryTotal(e) + "명"; detail = esc(entryDetailText(e)); }
     const row = document.createElement("div");
     row.className = "row";
     row.innerHTML = '<span class="nm">' + esc(name) +
+      (detail ? '<span class="detail">' + detail + '</span>' : '') +
       (e.memo ? '<span class="memo">' + esc(e.memo) + '</span>' : '') +
       '</span><span class="' + cls + '">' + val + '</span>';
     list.appendChild(row);
@@ -560,8 +618,7 @@ function kakaoText(r) {
     if (!recorded(e)) return;
     let line = name + " : ";
     if (e.closed) line += "문닫음";
-    else if (e.count !== null) line += e.count + "명";
-    else line += "메모만";
+    else line += entryDetailText(e);
     if (e.memo) line += " (" + e.memo + ")";
     lines.push(line);
   });
@@ -585,8 +642,16 @@ function roundPayload(r) {
     day: DAYS[new Date(r.date + "T00:00:00").getDay()],
     startTime: r.startTime,
     stores: r.stores,
-    counts: r.entries.map(e => e.closed ? "닫음" : (e.count !== null ? e.count : "")),
-    memos: r.entries.map(e => e.memo || "")
+    counts: r.entries.map(e => e.closed ? "닫음" : (recorded(e) ? entryTotal(e) : "")),
+    // 4인상·2인상으로 적은 바퀴는 그 내역을 메모 칸에도 함께 남긴다 (숫자만으로는 상 개수가 안 보이므로)
+    memos: r.entries.map(e => {
+      if (e.closed || isLegacy(e) || !recorded(e)) return e.memo || "";
+      const parts = [];
+      if (e.four) parts.push("4인상 " + e.four);
+      if (e.two) parts.push("2인상 " + e.two);
+      const detail = parts.join(", ");
+      return detail && e.memo ? detail + " · " + e.memo : (detail || e.memo || "");
+    })
   };
 }
 async function exportRound(r, btn) {
