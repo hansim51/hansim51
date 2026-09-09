@@ -24,6 +24,7 @@
     --amber-soft: #fef3e2;
     --red: #c2410c;
     --green: #3f6212;
+    --violet: #6d4aa8;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; }
@@ -120,10 +121,11 @@
   }
   .tally-total .unit { font-size: 17px; color: var(--ink-soft); font-weight: 600; }
   .tally-total.closed { color: var(--red); font-size: 26px; line-height: 42px; }
+  .tally-total.done { color: var(--violet); font-size: 26px; line-height: 42px; }
   .tally-total.empty { color: #cfc7bb; font-size: 20px; line-height: 42px; }
-  .quick-row { display: flex; gap: 8px; margin-top: 10px; }
+  .quick-row { display: flex; gap: 6px; margin-top: 10px; }
   .quick-row button {
-    flex: 1; padding: 13px; border-radius: 12px; font-size: 15px; font-weight: 800;
+    flex: 1; padding: 13px 4px; border-radius: 12px; font-size: 14px; font-weight: 800;
     background: var(--bg); border: 1px solid var(--line);
   }
   .quick-row button.dim { opacity: .35; pointer-events: none; }
@@ -131,6 +133,8 @@
   #btn-zero.on { background: var(--amber-soft); color: var(--amber-deep); border-color: #f3ce96; }
   .key-close { color: var(--red); }
   .key-close.on { background: var(--red); color: #fff; border-color: var(--red); }
+  .key-done { color: var(--violet); }
+  .key-done.on { background: var(--violet); color: #fff; border-color: var(--violet); }
   .memo-wrap { margin-top: 12px; }
   .memo-wrap input, .modal-box input, .modal-box textarea {
     width: 100%; font-family: inherit; font-size: 16px; padding: 12px 14px;
@@ -157,7 +161,9 @@
   .sum-list .detail { display: block; font-size: 12.5px; color: var(--amber-deep); font-weight: 600; margin-top: 2px; }
   .sum-list .val { white-space: nowrap; font-weight: 700; color: var(--amber-deep); }
   .sum-list .val.closed { color: var(--red); }
+  .sum-list .val.done { color: var(--violet); }
   .sum-list .val.none { color: #cfc7bb; font-weight: 400; }
+  .rank-row .nm { font-weight: 700; }
   .done-btns { display: flex; flex-direction: column; gap: 9px; margin-top: 14px; padding-bottom: 6px; }
   #scr-done h2 { font-size: 21px; font-weight: 800; padding: 6px 2px 4px; }
 
@@ -289,6 +295,7 @@
       <div class="quick-row">
         <button id="btn-zero" onclick="toggleZero()">0명</button>
         <button class="key-close" id="key-close" onclick="toggleClosed()">오늘 쉼</button>
+        <button class="key-done" id="key-done" onclick="toggleDone()">영업 끝</button>
       </div>
       <div class="memo-wrap">
         <input type="text" id="in-memo" placeholder="메모 (안 적어도 됨)" autocomplete="off">
@@ -306,6 +313,10 @@
     <h2>한 바퀴 끝 🎉</h2>
     <div class="sum-line" id="sum-line"></div>
     <div class="card sum-list" id="sum-list"></div>
+    <div class="rank-sect" id="rank-sect">
+      <div class="set-sect" style="padding-top:22px;">손님 많은 가게 20곳</div>
+      <div class="card sum-list" id="rank-list"></div>
+    </div>
     <div class="done-btns">
       <button class="btn-kakao" onclick="shareKakao(doneRound)">카카오톡으로 보내기</button>
       <button class="btn-sheet" onclick="exportRound(doneRound, this)">구글 시트로 보내기</button>
@@ -324,6 +335,10 @@
     <div class="scr-head"><button class="back" onclick="openHist()">‹ 뒤로</button><h2>기록 보기</h2></div>
     <div class="sum-line" id="hv-line"></div>
     <div class="card sum-list" id="hv-list"></div>
+    <div class="rank-sect" id="hv-rank-sect">
+      <div class="set-sect" style="padding-top:22px;">손님 많은 가게 20곳</div>
+      <div class="card sum-list" id="hv-rank-list"></div>
+    </div>
     <div class="done-btns">
       <button class="btn-kakao" onclick="shareKakao(viewRound)">카카오톡으로 보내기</button>
       <button class="btn-sheet" onclick="exportRound(viewRound, this)">구글 시트로 보내기</button>
@@ -429,13 +444,16 @@ function keepScroll(fn) {
 // 예전에 적은 기록(e.count가 숫자, e.four/e.two가 없음)은 그대로 보여주고,
 // 새로 적는 기록은 4인상·3인상·2인상 개수로 셈한다. (2026-08-23에 만든 4인상·2인상만 있던
 // 기록에는 e.three가 아예 없는데, 그런 기록도 "3인상 0곳"으로 자연스레 다뤄지도록 항상 (e.three||0)으로 읽는다.)
+// e.done("영업 끝")은 e.closed("오늘 쉼")와는 뜻이 다르다 — 가게는 오늘 열심히 영업했지만,
+// 이 바퀴가 그 가게에 닿았을 때는 이미 정리(마감)를 마쳐서 손님 수를 셀 수 없었다는 뜻이다.
+// 둘 다 "이번엔 셈 못 함"이라는 점은 같아서 손님 수는 0으로 다루되, 화면·시트에는 다른 말로 보여준다.
 function isLegacy(e) { return e.four === undefined && e.two === undefined && e.count !== undefined; }
 function recorded(e) {
   if (isLegacy(e)) return e.count !== null || e.closed || e.memo;
-  return e.closed || !!e.memo || e.touched || (e.four > 0) || (e.three > 0) || (e.two > 0);
+  return e.closed || e.done || !!e.memo || e.touched || (e.four > 0) || (e.three > 0) || (e.two > 0);
 }
 function entryTotal(e) {
-  if (e.closed) return 0;
+  if (e.closed || e.done) return 0;
   if (isLegacy(e)) return e.count === null ? 0 : e.count;
   return (e.four || 0) * 4 + (e.three || 0) * 3 + (e.two || 0) * 2;
 }
@@ -502,7 +520,7 @@ function startRound() {
     id: data.nextId++, areaId: area.id, area: area.name,
     date: $("in-date").value, startTime: nowTime(),
     stores: area.stores.slice(),
-    entries: area.stores.map(() => ({ four: 0, three: 0, two: 0, closed: false, memo: "", time: null, touched: false })),
+    entries: area.stores.map(() => ({ four: 0, three: 0, two: 0, closed: false, done: false, memo: "", time: null, touched: false })),
     idx: 0
   };
   idx = 0; mode = "new";
@@ -530,12 +548,16 @@ function renderStore() {
 function renderTally() {
   const e = round.entries[idx];
   const v = $("st-count");
+  const inactive = e.closed || e.done;
   $("key-close").classList.toggle("on", e.closed);
-  $("btn-zero").classList.toggle("dim", e.closed);
-  $("row-four").classList.toggle("dim", e.closed);
-  $("row-three").classList.toggle("dim", e.closed);
-  $("row-two").classList.toggle("dim", e.closed);
-  v.classList.remove("closed", "empty");
+  $("key-done").classList.toggle("on", e.done);
+  $("key-close").classList.toggle("dim", e.done);
+  $("key-done").classList.toggle("dim", e.closed);
+  $("btn-zero").classList.toggle("dim", inactive);
+  $("row-four").classList.toggle("dim", inactive);
+  $("row-three").classList.toggle("dim", inactive);
+  $("row-two").classList.toggle("dim", inactive);
+  v.classList.remove("closed", "done", "empty");
 
   if (isLegacy(e)) {
     // 예전 방식으로 적힌 기록 — 4인상/3인상/2인상 칸은 0에서 새로 시작할 수 있게 두고, 이전 값은 참고로만 보여준다
@@ -548,15 +570,16 @@ function renderTally() {
   $("three-n").textContent = e.three || 0;
   $("two-n").textContent = e.two || 0;
   const isZeroActive = e.touched && !(e.four > 0) && !(e.three > 0) && !(e.two > 0);
-  $("btn-zero").classList.toggle("on", !e.closed && isZeroActive);
+  $("btn-zero").classList.toggle("on", !inactive && isZeroActive);
   if (e.closed) { v.textContent = "오늘 쉼"; v.classList.add("closed"); }
+  else if (e.done) { v.textContent = "영업 끝"; v.classList.add("done"); }
   else if (!recorded(e)) { v.textContent = "─"; v.classList.add("empty"); }
   else { v.innerHTML = entryTotal(e) + '<span class="unit"> 명</span>'; }
 }
 function toLegacyReset(e) { if (isLegacy(e)) { delete e.count; e.four = 0; e.three = 0; e.two = 0; } }
 function stepFour(d) {
   const e = round.entries[idx];
-  if (e.closed) return;
+  if (e.closed || e.done) return;
   toLegacyReset(e);
   e.four = Math.max(0, (e.four || 0) + d);
   e.touched = true;
@@ -564,7 +587,7 @@ function stepFour(d) {
 }
 function stepThree(d) {
   const e = round.entries[idx];
-  if (e.closed) return;
+  if (e.closed || e.done) return;
   toLegacyReset(e);
   e.three = Math.max(0, (e.three || 0) + d);
   e.touched = true;
@@ -572,7 +595,7 @@ function stepThree(d) {
 }
 function stepTwo(d) {
   const e = round.entries[idx];
-  if (e.closed) return;
+  if (e.closed || e.done) return;
   toLegacyReset(e);
   e.two = Math.max(0, (e.two || 0) + d);
   e.touched = true;
@@ -581,17 +604,25 @@ function stepTwo(d) {
 // 손님이 정말 0명일 때 — 스테퍼를 굳이 안 눌러도 바로 "0명"으로 기록한다. 한 번 더 누르면 취소.
 function toggleZero() {
   const e = round.entries[idx];
-  if (e.closed) return;
+  if (e.closed || e.done) return;
   const wasZeroActive = !isLegacy(e) && e.touched && !(e.four > 0) && !(e.three > 0) && !(e.two > 0);
   toLegacyReset(e);
   e.four = 0; e.three = 0; e.two = 0;
   e.touched = !wasZeroActive;
   renderTally();
 }
+// "오늘 쉼" — 가게가 오늘 아예 문을 안 열었다는 뜻
 function toggleClosed() {
   const e = round.entries[idx];
   e.closed = !e.closed;
-  if (e.closed) { delete e.count; e.four = 0; e.three = 0; e.two = 0; e.touched = false; }
+  if (e.closed) { e.done = false; delete e.count; e.four = 0; e.three = 0; e.two = 0; e.touched = false; }
+  renderTally();
+}
+// "영업 끝" — 가게는 오늘 영업했지만, 이 바퀴가 닿았을 때는 이미 정리를 마쳐서 셈을 못 했다는 뜻
+function toggleDone() {
+  const e = round.entries[idx];
+  e.done = !e.done;
+  if (e.done) { e.closed = false; delete e.count; e.four = 0; e.three = 0; e.two = 0; e.touched = false; }
   renderTally();
 }
 function saveCurrent() {
@@ -627,26 +658,30 @@ function finishRound() {
   doneRound = round;
   renderSummary(round, "sum-line", "sum-list",
     canStore ? " · 저장됨" : "");
+  renderRanking(round, "rank-sect", "rank-list");
   show("scr-done");
 }
 
 // ── 요약 그리기 (끝 화면·지난 기록 공용) ──
 function roundStats(r) {
   const done = r.entries.filter(recorded).length;
-  const total = r.entries.reduce((s,e) => s + (e.closed ? 0 : entryTotal(e)), 0);
+  const total = r.entries.reduce((s,e) => s + entryTotal(e), 0);
   const closed = r.entries.filter(e => e.closed).length;
-  return { done, total, closed };
+  const finished = r.entries.filter(e => e.done).length;
+  return { done, total, closed, finished };
 }
 function renderSummary(r, lineId, listId, extra) {
   const st = roundStats(r);
   $(lineId).textContent = r.area + " · " + fmtDate(r.date) + " " + r.startTime +
-    " — 기록 " + st.done + "곳 · 손님 " + st.total + "명 · 오늘 쉼 " + st.closed + "곳" + (extra || "");
+    " — 기록 " + st.done + "곳 · 손님 " + st.total + "명 · 오늘 쉼 " + st.closed + "곳" +
+    (st.finished ? " · 영업 끝 " + st.finished + "곳" : "") + (extra || "");
   const list = $(listId);
   list.innerHTML = "";
   r.stores.forEach((name, i) => {
     const e = r.entries[i];
     let val, cls = "val", detail = "";
     if (e.closed) { val = "오늘 쉼"; cls += " closed"; }
+    else if (e.done) { val = "영업 끝"; cls += " done"; }
     else if (!recorded(e)) { val = "기록 없음"; cls += " none"; }
     else { val = entryTotal(e) + "명"; detail = esc(entryDetailText(e)); }
     const row = document.createElement("div");
@@ -658,6 +693,28 @@ function renderSummary(r, lineId, listId, extra) {
     list.appendChild(row);
   });
 }
+// 손님 많은 가게 20곳 — "오늘 쉼"·"영업 끝"·기록 없음은 빼고, 손님 많은 차례로 20곳까지
+function rankingRows(r) {
+  return r.stores
+    .map((name, i) => ({ name, e: r.entries[i], total: entryTotal(r.entries[i]) }))
+    .filter(x => !x.e.closed && !x.e.done && x.total > 0)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 20);
+}
+function renderRanking(r, sectId, listId) {
+  const rows = rankingRows(r);
+  const sect = $(sectId);
+  const list = $(listId);
+  list.innerHTML = "";
+  if (rows.length === 0) { sect.style.display = "none"; return; }
+  sect.style.display = "block";
+  rows.forEach((row, i) => {
+    const div = document.createElement("div");
+    div.className = "row rank-row";
+    div.innerHTML = '<span class="nm">' + (i + 1) + "등 " + esc(row.name) + " " + esc(entryDetailText(row.e)) + '</span>';
+    list.appendChild(div);
+  });
+}
 
 // ── 카카오톡으로 보내기 ──
 function kakaoText(r) {
@@ -667,6 +724,7 @@ function kakaoText(r) {
     if (!recorded(e)) return;
     let line = name + " : ";
     if (e.closed) line += "오늘 쉼";
+    else if (e.done) line += "영업 끝";
     else line += entryDetailText(e);
     if (e.memo) line += " (" + e.memo + ")";
     lines.push(line);
@@ -691,10 +749,10 @@ function roundPayload(r) {
     day: DAYS[new Date(r.date + "T00:00:00").getDay()],
     startTime: r.startTime,
     stores: r.stores,
-    counts: r.entries.map(e => e.closed ? "닫음" : (recorded(e) ? entryTotal(e) : "")),
+    counts: r.entries.map(e => e.closed ? "닫음" : e.done ? "영업끝" : (recorded(e) ? entryTotal(e) : "")),
     // 4인상·3인상·2인상으로 적은 바퀴는 그 내역을 메모 칸에도 함께 남긴다 (숫자만으로는 상 개수가 안 보이므로)
     memos: r.entries.map(e => {
-      if (e.closed || isLegacy(e) || !recorded(e)) return e.memo || "";
+      if (e.closed || e.done || isLegacy(e) || !recorded(e)) return e.memo || "";
       const parts = [];
       if (e.four) parts.push("4인 " + e.four);
       if (e.three) parts.push("3인 " + e.three);
@@ -743,6 +801,7 @@ function openHist() {
     item.className = "list-item";
     item.innerHTML = '<div class="grow"><div class="t">' + fmtDate(r.date) + " " + r.startTime +
       ' · ' + esc(r.area) + '</div><div class="s">기록 ' + st.done + "곳 · 손님 " + st.total + "명 · 오늘 쉼 " + st.closed + '곳' +
+      (st.finished ? ' · 영업 끝 ' + st.finished + '곳' : '') +
       (r.sentAt ? ' · 시트 보냄' : '') + '</div></div>' +
       '<button class="mini">보기</button>';
     item.onclick = () => { viewRound = r; renderHistView(); show("scr-histview"); };
@@ -752,6 +811,7 @@ function openHist() {
 }
 function renderHistView() {
   renderSummary(viewRound, "hv-line", "hv-list", "");
+  renderRanking(viewRound, "hv-rank-sect", "hv-rank-list");
   const b = $("btn-del-round");
   b.textContent = "이 기록 지우기"; b.classList.remove("armed"); b.style.color = "var(--red)";
 }
