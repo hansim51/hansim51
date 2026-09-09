@@ -121,10 +121,15 @@
   .tally-total .unit { font-size: 17px; color: var(--ink-soft); font-weight: 600; }
   .tally-total.closed { color: var(--red); font-size: 26px; line-height: 42px; }
   .tally-total.empty { color: #cfc7bb; font-size: 20px; line-height: 42px; }
-  .key-close {
-    width: 100%; margin-top: 10px; padding: 13px; border-radius: 12px; font-size: 15px;
-    background: var(--bg); border: 1px solid var(--line); color: var(--red); font-weight: 800;
+  .quick-row { display: flex; gap: 8px; margin-top: 10px; }
+  .quick-row button {
+    flex: 1; padding: 13px; border-radius: 12px; font-size: 15px; font-weight: 800;
+    background: var(--bg); border: 1px solid var(--line);
   }
+  .quick-row button.dim { opacity: .35; pointer-events: none; }
+  #btn-zero { color: var(--ink-soft); }
+  #btn-zero.on { background: var(--amber-soft); color: var(--amber-deep); border-color: #f3ce96; }
+  .key-close { color: var(--red); }
   .key-close.on { background: var(--red); color: #fff; border-color: var(--red); }
   .memo-wrap { margin-top: 12px; }
   .memo-wrap input, .modal-box input, .modal-box textarea {
@@ -263,6 +268,14 @@
             <button onclick="stepFour(1)">＋</button>
           </div>
         </div>
+        <div class="tally-row" id="row-three">
+          <span class="tally-label">3인상</span>
+          <div class="stepper">
+            <button onclick="stepThree(-1)">－</button>
+            <span class="n" id="three-n">0</span>
+            <button onclick="stepThree(1)">＋</button>
+          </div>
+        </div>
         <div class="tally-row" id="row-two">
           <span class="tally-label">2인상</span>
           <div class="stepper">
@@ -273,7 +286,10 @@
         </div>
       </div>
       <div class="tally-total" id="st-count"></div>
-      <button class="key-close" id="key-close" onclick="toggleClosed()">문닫음</button>
+      <div class="quick-row">
+        <button id="btn-zero" onclick="toggleZero()">0명</button>
+        <button class="key-close" id="key-close" onclick="toggleClosed()">오늘 쉼</button>
+      </div>
       <div class="memo-wrap">
         <input type="text" id="in-memo" placeholder="메모 (안 적어도 됨)" autocomplete="off">
       </div>
@@ -336,10 +352,10 @@
   <!-- 가게 목록 (상권 하나) -->
   <section class="screen" id="scr-stores">
     <div class="scr-head"><button class="back" onclick="openSet()">‹ 뒤로</button><h2 id="stores-title"></h2></div>
-    <div class="hint" style="padding: 0 2px 10px;">도는 길 순서대로 늘어놓으세요. ↑↓ 로 순서를 바꿉니다.</div>
+    <div class="hint" style="padding: 0 2px 10px;">도는 길 순서대로 늘어놓으세요. ↑↓ 로 순서를 바꾸고, ＋로 그 가게 바로 아래에 새 가게를 끼워 넣을 수 있어요.</div>
+    <button class="btn-ghost" style="color:var(--amber-deep); margin-bottom:12px;" onclick="addStore()">＋ 가게 보태기 (맨 끝에)</button>
     <div class="list" id="store-list"></div>
     <div class="add-row">
-      <button class="btn-ghost" style="color:var(--amber-deep)" onclick="addStore()">＋ 가게 보태기</button>
       <button class="btn-ghost" onclick="addStoresBulk()">여러 가게 한꺼번에 붙여넣기</button>
     </div>
   </section>
@@ -402,28 +418,36 @@ function nowTime() {
 }
 function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 function areaById(id) { return data.areas.find(a => a.id === id); }
+// 목록을 다시 그리되, 화면이 맨 위로 튀지 않게 스크롤 자리를 지켜준다
+function keepScroll(fn) {
+  const y = window.scrollY;
+  fn();
+  window.scrollTo(0, y);
+}
 
-// ── 손님 수 셈 (4인상·2인상 방식 / 예전 방식 둘 다 다룸) ──
+// ── 손님 수 셈 (4인상·3인상·2인상 방식 / 예전 방식 둘 다 다룸) ──
 // 예전에 적은 기록(e.count가 숫자, e.four/e.two가 없음)은 그대로 보여주고,
-// 새로 적는 기록은 4인상·2인상 개수로 셈한다.
+// 새로 적는 기록은 4인상·3인상·2인상 개수로 셈한다. (2026-08-23에 만든 4인상·2인상만 있던
+// 기록에는 e.three가 아예 없는데, 그런 기록도 "3인상 0곳"으로 자연스레 다뤄지도록 항상 (e.three||0)으로 읽는다.)
 function isLegacy(e) { return e.four === undefined && e.two === undefined && e.count !== undefined; }
 function recorded(e) {
   if (isLegacy(e)) return e.count !== null || e.closed || e.memo;
-  return e.closed || !!e.memo || e.touched || (e.four > 0) || (e.two > 0);
+  return e.closed || !!e.memo || e.touched || (e.four > 0) || (e.three > 0) || (e.two > 0);
 }
 function entryTotal(e) {
   if (e.closed) return 0;
   if (isLegacy(e)) return e.count === null ? 0 : e.count;
-  return (e.four || 0) * 4 + (e.two || 0) * 2;
+  return (e.four || 0) * 4 + (e.three || 0) * 3 + (e.two || 0) * 2;
 }
-// 화면·카카오톡에 보여줄 글 — "4인상 2, 2인상 6, 다 해서 20명" 꼴
+// 화면·카카오톡에 보여줄 글 — "4인 2, 3인 1, 2인 4 = 16명" 꼴
 function entryDetailText(e) {
   if (isLegacy(e)) return e.count + "명";
   const parts = [];
-  if (e.four) parts.push("4인상 " + e.four);
-  if (e.two) parts.push("2인상 " + e.two);
+  if (e.four) parts.push("4인 " + e.four);
+  if (e.three) parts.push("3인 " + e.three);
+  if (e.two) parts.push("2인 " + e.two);
   const total = entryTotal(e);
-  return parts.length ? parts.join(", ") + ", 다 해서 " + total + "명" : total + "명";
+  return parts.length ? parts.join(", ") + " = " + total + "명" : total + "명";
 }
 
 // ── 모달 ──
@@ -478,7 +502,7 @@ function startRound() {
     id: data.nextId++, areaId: area.id, area: area.name,
     date: $("in-date").value, startTime: nowTime(),
     stores: area.stores.slice(),
-    entries: area.stores.map(() => ({ four: 0, two: 0, closed: false, memo: "", time: null, touched: false })),
+    entries: area.stores.map(() => ({ four: 0, three: 0, two: 0, closed: false, memo: "", time: null, touched: false })),
     idx: 0
   };
   idx = 0; mode = "new";
@@ -507,42 +531,67 @@ function renderTally() {
   const e = round.entries[idx];
   const v = $("st-count");
   $("key-close").classList.toggle("on", e.closed);
+  $("btn-zero").classList.toggle("dim", e.closed);
   $("row-four").classList.toggle("dim", e.closed);
+  $("row-three").classList.toggle("dim", e.closed);
   $("row-two").classList.toggle("dim", e.closed);
   v.classList.remove("closed", "empty");
 
   if (isLegacy(e)) {
-    // 예전 방식으로 적힌 기록 — 4인상/2인상 칸은 0에서 새로 시작할 수 있게 두고, 이전 값은 참고로만 보여준다
-    $("four-n").textContent = "0"; $("two-n").textContent = "0";
+    // 예전 방식으로 적힌 기록 — 4인상/3인상/2인상 칸은 0에서 새로 시작할 수 있게 두고, 이전 값은 참고로만 보여준다
+    $("four-n").textContent = "0"; $("three-n").textContent = "0"; $("two-n").textContent = "0";
+    $("btn-zero").classList.remove("on");
     v.innerHTML = e.count + '<span class="unit"> 명 (예전 방식으로 적은 기록)</span>';
     return;
   }
   $("four-n").textContent = e.four || 0;
+  $("three-n").textContent = e.three || 0;
   $("two-n").textContent = e.two || 0;
-  if (e.closed) { v.textContent = "문닫음"; v.classList.add("closed"); }
+  const isZeroActive = e.touched && !(e.four > 0) && !(e.three > 0) && !(e.two > 0);
+  $("btn-zero").classList.toggle("on", !e.closed && isZeroActive);
+  if (e.closed) { v.textContent = "오늘 쉼"; v.classList.add("closed"); }
   else if (!recorded(e)) { v.textContent = "─"; v.classList.add("empty"); }
   else { v.innerHTML = entryTotal(e) + '<span class="unit"> 명</span>'; }
 }
+function toLegacyReset(e) { if (isLegacy(e)) { delete e.count; e.four = 0; e.three = 0; e.two = 0; } }
 function stepFour(d) {
   const e = round.entries[idx];
   if (e.closed) return;
-  if (isLegacy(e)) { delete e.count; e.four = 0; e.two = 0; }
+  toLegacyReset(e);
   e.four = Math.max(0, (e.four || 0) + d);
+  e.touched = true;
+  renderTally();
+}
+function stepThree(d) {
+  const e = round.entries[idx];
+  if (e.closed) return;
+  toLegacyReset(e);
+  e.three = Math.max(0, (e.three || 0) + d);
   e.touched = true;
   renderTally();
 }
 function stepTwo(d) {
   const e = round.entries[idx];
   if (e.closed) return;
-  if (isLegacy(e)) { delete e.count; e.four = 0; e.two = 0; }
+  toLegacyReset(e);
   e.two = Math.max(0, (e.two || 0) + d);
   e.touched = true;
+  renderTally();
+}
+// 손님이 정말 0명일 때 — 스테퍼를 굳이 안 눌러도 바로 "0명"으로 기록한다. 한 번 더 누르면 취소.
+function toggleZero() {
+  const e = round.entries[idx];
+  if (e.closed) return;
+  const wasZeroActive = !isLegacy(e) && e.touched && !(e.four > 0) && !(e.three > 0) && !(e.two > 0);
+  toLegacyReset(e);
+  e.four = 0; e.three = 0; e.two = 0;
+  e.touched = !wasZeroActive;
   renderTally();
 }
 function toggleClosed() {
   const e = round.entries[idx];
   e.closed = !e.closed;
-  if (e.closed) { delete e.count; e.four = 0; e.two = 0; e.touched = false; }
+  if (e.closed) { delete e.count; e.four = 0; e.three = 0; e.two = 0; e.touched = false; }
   renderTally();
 }
 function saveCurrent() {
@@ -591,13 +640,13 @@ function roundStats(r) {
 function renderSummary(r, lineId, listId, extra) {
   const st = roundStats(r);
   $(lineId).textContent = r.area + " · " + fmtDate(r.date) + " " + r.startTime +
-    " — 기록 " + st.done + "곳 · 손님 " + st.total + "명 · 문닫음 " + st.closed + "곳" + (extra || "");
+    " — 기록 " + st.done + "곳 · 손님 " + st.total + "명 · 오늘 쉼 " + st.closed + "곳" + (extra || "");
   const list = $(listId);
   list.innerHTML = "";
   r.stores.forEach((name, i) => {
     const e = r.entries[i];
     let val, cls = "val", detail = "";
-    if (e.closed) { val = "문닫음"; cls += " closed"; }
+    if (e.closed) { val = "오늘 쉼"; cls += " closed"; }
     else if (!recorded(e)) { val = "기록 없음"; cls += " none"; }
     else { val = entryTotal(e) + "명"; detail = esc(entryDetailText(e)); }
     const row = document.createElement("div");
@@ -617,7 +666,7 @@ function kakaoText(r) {
     const e = r.entries[i];
     if (!recorded(e)) return;
     let line = name + " : ";
-    if (e.closed) line += "문닫음";
+    if (e.closed) line += "오늘 쉼";
     else line += entryDetailText(e);
     if (e.memo) line += " (" + e.memo + ")";
     lines.push(line);
@@ -643,12 +692,13 @@ function roundPayload(r) {
     startTime: r.startTime,
     stores: r.stores,
     counts: r.entries.map(e => e.closed ? "닫음" : (recorded(e) ? entryTotal(e) : "")),
-    // 4인상·2인상으로 적은 바퀴는 그 내역을 메모 칸에도 함께 남긴다 (숫자만으로는 상 개수가 안 보이므로)
+    // 4인상·3인상·2인상으로 적은 바퀴는 그 내역을 메모 칸에도 함께 남긴다 (숫자만으로는 상 개수가 안 보이므로)
     memos: r.entries.map(e => {
       if (e.closed || isLegacy(e) || !recorded(e)) return e.memo || "";
       const parts = [];
-      if (e.four) parts.push("4인상 " + e.four);
-      if (e.two) parts.push("2인상 " + e.two);
+      if (e.four) parts.push("4인 " + e.four);
+      if (e.three) parts.push("3인 " + e.three);
+      if (e.two) parts.push("2인 " + e.two);
       const detail = parts.join(", ");
       return detail && e.memo ? detail + " · " + e.memo : (detail || e.memo || "");
     })
@@ -692,7 +742,7 @@ function openHist() {
     const item = document.createElement("div");
     item.className = "list-item";
     item.innerHTML = '<div class="grow"><div class="t">' + fmtDate(r.date) + " " + r.startTime +
-      ' · ' + esc(r.area) + '</div><div class="s">기록 ' + st.done + "곳 · 손님 " + st.total + "명 · 문닫음 " + st.closed + '곳' +
+      ' · ' + esc(r.area) + '</div><div class="s">기록 ' + st.done + "곳 · 손님 " + st.total + "명 · 오늘 쉼 " + st.closed + '곳' +
       (r.sentAt ? ' · 시트 보냄' : '') + '</div></div>' +
       '<button class="mini">보기</button>';
     item.onclick = () => { viewRound = r; renderHistView(); show("scr-histview"); };
@@ -779,12 +829,17 @@ function addArea() {
 let curAreaId = null;
 function openStores(id) {
   curAreaId = id;
-  const a = areaById(id);
-  $("stores-title").textContent = a.name + " 가게 목록";
+  $("stores-title").textContent = areaById(id).name + " 가게 목록";
+  renderStoreList();
+  show("scr-stores");
+}
+// 목록만 다시 그린다 (화면 전환·스크롤 이동 없음 — moveStore 등에서 keepScroll과 함께 쓴다)
+function renderStoreList() {
+  const a = areaById(curAreaId);
   const list = $("store-list");
   list.innerHTML = "";
   if (a.stores.length === 0) {
-    list.innerHTML = '<div class="empty-note">가게가 없어요.<br>아래에서 보태거나, 한꺼번에 붙여넣으세요.</div>';
+    list.innerHTML = '<div class="empty-note">가게가 없어요.<br>위에서 보태거나, 한꺼번에 붙여넣으세요.</div>';
   }
   a.stores.forEach((name, i) => {
     const item = document.createElement("div");
@@ -793,28 +848,39 @@ function openStores(id) {
     g.innerHTML = '<div class="t">' + (i + 1) + ". " + esc(name) + '</div>';
     const up = mkBtn("↑", () => moveStore(i, -1), "updown");
     const dn = mkBtn("↓", () => moveStore(i, 1), "updown");
+    const ins = mkBtn("＋", () => insertStoreAfter(i), "updown");
     const ren = mkBtn("✎", () => askText("가게 이름 고치기", name, v => {
-      if (!v) return; a.stores[i] = v; save(); openStores(id);
-    }));
-    const del = mkBtn("✕", null, "warn");
-    del.onclick = () => armDel(del, "✕", () => { a.stores.splice(i, 1); save(); openStores(id); });
-    item.append(g, up, dn, ren, del);
+      if (!v) return; a.stores[i] = v; save(); keepScroll(renderStoreList);
+    }), "updown");
+    const del = mkBtn("✕", null, "updown warn");
+    del.onclick = () => armDel(del, "✕", () => { a.stores.splice(i, 1); save(); keepScroll(renderStoreList); });
+    item.append(g, up, dn, ins, ren, del);
     list.appendChild(item);
   });
-  show("scr-stores");
 }
 function moveStore(i, d) {
   const a = areaById(curAreaId);
   const j = i + d;
   if (j < 0 || j >= a.stores.length) return;
   [a.stores[i], a.stores[j]] = [a.stores[j], a.stores[i]];
-  save(); openStores(curAreaId);
+  save(); keepScroll(renderStoreList);
 }
+// 목록 맨 끝에 보탠다 (화면 위쪽 "＋ 가게 보태기" 단추)
 function addStore() {
   askText("새 가게 이름", "", v => {
     if (!v) return;
     areaById(curAreaId).stores.push(v);
-    data.seeded = false; save(); openStores(curAreaId);
+    data.seeded = false; save(); keepScroll(renderStoreList);
+    toast(v + " 를 맨 끝에 보탰어요");
+  });
+}
+// 이 가게 바로 아래에 끼워 넣는다 (각 줄의 ＋ 단추) — 나머지는 저절로 한 칸씩 밀린다
+function insertStoreAfter(i) {
+  const a = areaById(curAreaId);
+  askText(a.stores[i] + " 아래에 넣을 새 가게 이름", "", v => {
+    if (!v) return;
+    a.stores.splice(i + 1, 0, v);
+    data.seeded = false; save(); keepScroll(renderStoreList);
   });
 }
 function addStoresBulk() {
@@ -822,7 +888,7 @@ function addStoresBulk() {
     const names = text.split("\n").map(s => s.trim()).filter(Boolean);
     if (names.length === 0) return;
     areaById(curAreaId).stores.push(...names);
-    data.seeded = false; save(); openStores(curAreaId);
+    data.seeded = false; save(); keepScroll(renderStoreList);
     toast(names.length + "곳을 보탰어요");
   });
 }
